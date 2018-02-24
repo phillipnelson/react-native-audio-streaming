@@ -4,7 +4,7 @@
   "description": "React native audio streaming library for android and iOS",
   "repository": {
     "type": "git",
-    "url": "git@github.com:tlenclos/react-native-audio-streaming.git"
+    "url": "git@github.com:phillipnelson/react-native-audio-streaming.git"
   },
   "keywords": [
     "react-native",

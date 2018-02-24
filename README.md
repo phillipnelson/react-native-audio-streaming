@@ -8,14 +8,16 @@
 - Shoutcast/Icy meta data support
 - Simple UI player component (if needed, an api to control the sound is available)
 
-If you are only looking to play local audio file with app in foreground, please [see other audio libs](https://github.com/tlenclos/react-native-audio-streaming/blob/master/README.md#other-rn-audio-projects).
+### Additional iOS Features
 
-![Demo iOS](https://raw.githubusercontent.com/tlenclos/react-native-audio-streaming/master/demo_ios.gif)
-![Demo android](https://raw.githubusercontent.com/tlenclos/react-native-audio-streaming/master/demo_android.gif)
+- Gapless playback for queue
+- Additional meta data and artwork for lockscreen controls
+
 
 ## First installation step (applied for both iOS & Android)
 
-`$ npm install react-native-audio-streaming --save`
+`$ npm install git+https://git@github.com/phillipnelson/react-native-audio-streaming.git --save`
+
 
 ### Next installation steps for iOS (choose one of three options below)
 
@@ -104,10 +106,7 @@ class PlayerUI extends Component {
 
 ## TODO
 
-- [ ] Allow to play local files
-- [ ] Allow to specify custom style for the android notification (maybe a custom view ?)
-- [ ] Allow to specify custom styles for the player
-- [ ] Handle artwork of artist
+- [ ] Android feature parity
 - [ ] Add tests
 
 ## Other RN audio projects
@@ -117,6 +116,7 @@ class PlayerUI extends Component {
 
 ## Credits
 
+- Using StreamingKit version from https://github.com/podverse/StreamingKit featuring Playback control
 - Android version based on the work of @EstebanFuentealba https://github.com/EstebanFuentealba/react-native-android-audio-streaming-aac
 - iOS version based on the work of @jhabdas https://github.com/jhabdas/lumpen-radio
 

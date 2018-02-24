@@ -32,7 +32,7 @@ RCT_EXPORT_MODULE()
    self = [super init];
    if (self) {
       [self setSharedAudioSessionCategory];
-      self.audioPlayer = [[STKAudioPlayer alloc] initWithOptions:(STKAudioPlayerOptions){ .flushQueueOnSeek = YES }];
+      self.audioPlayer = [[STKAudioPlayer alloc] initWithOptions:(STKAudioPlayerOptions){ .flushQueueOnSeek = NO }];
       [self.audioPlayer setDelegate:self];
       self.lastUrlString = @"";
       [NSTimer scheduledTimerWithTimeInterval:0.5 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
@@ -106,6 +106,33 @@ RCT_EXPORT_METHOD(play:(NSString *) streamUrl options:(NSDictionary *)options)
    }
    
    [self setNowPlayingInfo:true];
+}
+
+RCT_EXPORT_METHOD(queue:(NSString *) streamUrl)
+{
+   if (!self.audioPlayer) {
+      return;
+   }
+
+   [self.audioPlayer queue:streamUrl];
+}
+
+RCT_EXPORT_METHOD(setRate:(float) rate)
+{
+   if (!self.audioPlayer) {
+      return;
+   }
+
+   [self.audioPlayer setRate:rate];
+}
+
+RCT_EXPORT_METHOD(clearQueue)
+{
+   if (!self.audioPlayer) {
+      return;
+   }
+
+   [self.audioPlayer clearQueue];
 }
 
 RCT_EXPORT_METHOD(seekToTime:(double) seconds)

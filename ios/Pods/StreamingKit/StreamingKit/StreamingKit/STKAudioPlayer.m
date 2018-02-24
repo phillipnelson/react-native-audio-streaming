@@ -203,6 +203,7 @@ static AudioComponentDescription mixerDescription;
 static AudioComponentDescription nbandUnitDescription;
 static AudioComponentDescription outputUnitDescription;
 static AudioComponentDescription convertUnitDescription;
+static AudioComponentDescription playbackRateUnitDescription;
 static AudioStreamBasicDescription canonicalAudioStreamBasicDescription;
 static AudioStreamBasicDescription recordAudioStreamBasicDescription;
 
@@ -234,9 +235,11 @@ static AudioStreamBasicDescription recordAudioStreamBasicDescription;
 	AUNode eqOutputNode;
 	AUNode mixerInputNode;
 	AUNode mixerOutputNode;
+	AUNode playbackRateNode;
 	
     AudioComponentInstance eqUnit;
 	AudioComponentInstance mixerUnit;
+	AudioComponentInstance playbackRateUnit;
 	AudioComponentInstance outputUnit;
 		
     UInt32 eqBandCount;
@@ -342,7 +345,16 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
 #else
     const int bytesPerSample = sizeof(AudioSampleType);
 #endif
-    
+
+    playbackRateUnitDescription = (AudioComponentDescription)
+    {
+        .componentManufacturer	= kAudioUnitManufacturer_Apple,
+        .componentType			= kAudioUnitType_FormatConverter,
+        .componentSubType		= kAudioUnitSubType_AUiPodTimeOther,
+        .componentFlags			= 0,
+        .componentFlagsMask		= 0,
+    };
+
     canonicalAudioStreamBasicDescription = (AudioStreamBasicDescription)
     {
         .mSampleRate = 44100.00,
@@ -1030,6 +1042,30 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
     return retval;
 }
 
+-(float) rate
+{
+	AudioUnitParameterValue rateValue;
+	AudioUnitGetParameter(playbackRateUnit, kNewTimePitchParam_Rate, kAudioUnitScope_Global, 0, &rateValue);
+	return rateValue;
+}
+
+-(void) setRate:(float)rate
+{
+	AudioUnitSetParameter(playbackRateUnit, kNewTimePitchParam_Rate, kAudioUnitScope_Global, 0, rate, 0);
+}
+
+-(float) overlap
+{
+	AudioUnitParameterValue overlapValue;
+	AudioUnitGetParameter(playbackRateUnit, kNewTimePitchParam_Overlap, kAudioUnitScope_Global, 0, &overlapValue);
+	return overlapValue;
+}
+
+-(void) setOverlap:(float)overlap
+{
+	AudioUnitSetParameter(playbackRateUnit, kNewTimePitchParam_Overlap, kAudioUnitScope_Global, 0, overlap, 0);
+}
+
 -(BOOL) invokeOnPlaybackThread:(void(^)())block
 {
 	NSRunLoop* runLoop = playbackThreadRunLoop;
@@ -1497,15 +1533,15 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
         
         error = AudioFileStreamSeek(audioFileStream, seekPacket, &packetAlignedByteOffset, &ioFlags);
         
-        if (!error && !(ioFlags & kAudioFileStreamSeekFlag_OffsetIsEstimated))
-        {
-            double delta = ((seekByteOffset - (SInt64)currentEntry->audioDataOffset) - packetAlignedByteOffset) / calculatedBitRate * 8;
-            
-            OSSpinLockLock(&currentEntry->spinLock);
-            currentEntry->seekTime -= delta;
-            OSSpinLockUnlock(&currentEntry->spinLock);
-            
+        if (!error) {
             seekByteOffset = packetAlignedByteOffset + currentEntry->audioDataOffset;
+            if (!(ioFlags & kAudioFileStreamSeekFlag_OffsetIsEstimated)) {
+                double delta = ((seekByteOffset - (SInt64)currentEntry->audioDataOffset) - packetAlignedByteOffset) / calculatedBitRate * 8;
+
+                OSSpinLockLock(&currentEntry->spinLock);
+                currentEntry->seekTime -= delta;
+                OSSpinLockUnlock(&currentEntry->spinLock);
+            }
         }
     }
     
@@ -1671,12 +1707,6 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
     pthread_mutex_unlock(&playerMutex);
     
     [self processRunloop];
-}
-
--(void)dataSource:(STKDataSource *)dataSource didReadStreamMetadata:(NSDictionary *)metadata
-{
-    if([self.delegate respondsToSelector:@selector(audioPlayer:didReadStreamMetadata:)])
-        [self.delegate audioPlayer:self didReadStreamMetadata:metadata];
 }
 
 -(void) pause
@@ -2139,6 +2169,22 @@ static BOOL GetHardwareCodecClassDesc(UInt32 formatId, AudioClassDescription* cl
     }
 }
 
+-(void) createPlaybackRateUnit
+{
+    OSStatus status;
+    
+    CHECK_STATUS_AND_RETURN(AUGraphAddNode(audioGraph, &playbackRateUnitDescription, &playbackRateNode));
+    CHECK_STATUS_AND_RETURN(AUGraphNodeInfo(audioGraph, playbackRateNode, &playbackRateUnitDescription, &playbackRateUnit));
+    
+    //maxframes changed here
+    CHECK_STATUS_AND_RETURN(AudioUnitSetProperty(playbackRateUnit, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &maxFramesPerSlice, sizeof(maxFramesPerSlice)));
+#if TARGET_OS_IPHONE
+    CHECK_STATUS_AND_RETURN(AudioUnitSetParameter(playbackRateUnit, kNewTimePitchParam_Rate, kAudioUnitScope_Global, 0, 1, 0));
+#endif
+    
+  CHECK_STATUS_AND_RETURN(AudioUnitSetProperty(playbackRateUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, kOutputBus, &canonicalAudioStreamBasicDescription, sizeof(canonicalAudioStreamBasicDescription)));
+}
+
 -(void) createOutputUnit
 {
 	OSStatus status;
@@ -2317,6 +2363,7 @@ static BOOL GetHardwareCodecClassDesc(UInt32 formatId, AudioClassDescription* cl
 	
 	[self createEqUnit];
 	[self createMixerUnit];
+	[self createPlaybackRateUnit];
 	[self createOutputUnit];
     
     [self connectGraph];
@@ -2365,7 +2412,13 @@ static BOOL GetHardwareCodecClassDesc(UInt32 formatId, AudioClassDescription* cl
         [nodes addObject:@(mixerNode)];
         [units addObject:[NSValue valueWithPointer:mixerUnit]];
     }
-	
+
+    if (playbackRateNode)
+    {
+        [nodes addObject:@(playbackRateNode)];
+        [units addObject:[NSValue valueWithPointer:playbackRateUnit]];
+    }
+
     if (outputNode)
     {
         [nodes addObject:@(outputNode)];
